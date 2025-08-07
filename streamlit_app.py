@@ -6,7 +6,6 @@ from collections import Counter
 from io import StringIO
 import unicodedata
 import re
-import plotly.graph_objects as go
 from wordcloud import WordCloud
 import numpy as np
 
@@ -256,26 +255,36 @@ with tab1:
                      f"{(ic/ic_esperado*100-100):+.1f}% vs esperado")
     col_stats4.metric("Entropía aproximada", f"{np.log2(len(conteo)):.2f} bits" if conteo else "N/A")
     
-    # Gráfico de frecuencias con Plotly
+    # Gráfico de frecuencias con Matplotlib
     st.subheader("📈 Análisis de Frecuencias")
-    fig = go.Figure(data=[
-        go.Bar(name='Observada', x=df['Letra'], y=df['Frec. Observada (%)'],
-               marker_color='#1f77b4', opacity=0.8),
-        go.Scatter(name='Esperada', x=df['Letra'], y=df['Frec. Esperada (%)'],
-                  mode='lines+markers', line=dict(color='firebrick', width=2))
-    ])
+    fig, ax = plt.subplots(figsize=(12, 6))
     
-    fig.update_layout(
-        barmode='group',
-        title='Distribución de Frecuencias de Letras',
-        xaxis_title="Letra",
-        yaxis_title="Frecuencia (%)",
-        hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        height=500
-    )
+    # Ancho de las barras
+    ancho_barra = 0.35
+    indices = np.arange(len(df['Letra']))
     
-    st.plotly_chart(fig, use_container_width=True)
+    # Barras para frecuencias observadas
+    ax.bar(indices - ancho_barra/2, df['Frec. Observada (%)'], 
+           width=ancho_barra, label='Observada', alpha=0.7, color='#1f77b4')
+    
+    # Barras para frecuencias esperadas
+    ax.bar(indices + ancho_barra/2, df['Frec. Esperada (%)'], 
+           width=ancho_barra, label='Esperada', alpha=0.7, color='#ff7f0e')
+    
+    # Configuración del gráfico
+    ax.set_xticks(indices)
+    ax.set_xticklabels(df['Letra'])
+    ax.set_xlabel("Letra")
+    ax.set_ylabel("Frecuencia (%)")
+    ax.set_title("Distribución de Frecuencias de Letras")
+    ax.legend()
+    ax.grid(True, linestyle='--', alpha=0.7)
+    
+    # Rotar etiquetas si son muchas
+    if len(df) > 15:
+        plt.xticks(rotation=45)
+    
+    st.pyplot(fig)
     
     # Tabla de datos
     st.dataframe(df.style.format({'Frec. Esperada (%)': '{:.2f}', 
@@ -330,34 +339,31 @@ with tab1:
         
         st.metric("Correlación con idioma de referencia", f"{correlacion:.4f}")
         
-        # Gráfico de dispersión (CORRECCIÓN APLICADA AQUÍ)
-        fig_scatter = go.Figure()
-        fig_scatter.add_trace(go.Scatter(
-            x=df['Frec. Esperada (%)'],
-            y=df['Frec. Observada (%)'],
-            mode='markers+text',
-            text=df['Letra'],
-            marker=dict(size=12, color='royalblue')
-        ))  # Paréntesis corregido
+        # Gráfico de dispersión
+        fig_scatter, ax_scatter = plt.subplots(figsize=(10, 6))
+        
+        # Puntos de dispersión
+        ax_scatter.scatter(df['Frec. Esperada (%)'], df['Frec. Observada (%)'], 
+                          s=100, alpha=0.7, color='royalblue')
+        
+        # Etiquetas de puntos
+        for i, letra in enumerate(df['Letra']):
+            ax_scatter.annotate(letra, 
+                               (df['Frec. Esperada (%)'].iloc[i], 
+                                df['Frec. Observada (%)'].iloc[i]),
+                               fontsize=9)
         
         # Línea de referencia
-        fig_scatter.add_trace(go.Scatter(
-            x=[0, max(df['Frec. Esperada (%)'])],
-            y=[0, max(df['Frec. Esperada (%)'])],
-            mode='lines',
-            line=dict(color='firebrick', dash='dash'),
-            name='Referencia'
-        ))
+        max_val = max(df['Frec. Esperada (%)'].max(), df['Frec. Observada (%)'].max())
+        ax_scatter.plot([0, max_val], [0, max_val], 'r--', alpha=0.7)
         
-        fig_scatter.update_layout(
-            title='Frecuencia Observada vs Esperada',
-            xaxis_title='Frecuencia Esperada (%)',
-            yaxis_title='Frecuencia Observada (%)',
-            showlegend=False,
-            height=500
-        )
+        # Configuración del gráfico
+        ax_scatter.set_xlabel('Frecuencia Esperada (%)')
+        ax_scatter.set_ylabel('Frecuencia Observada (%)')
+        ax_scatter.set_title('Frecuencia Observada vs Esperada')
+        ax_scatter.grid(True, linestyle='--', alpha=0.5)
         
-        st.plotly_chart(fig_scatter, use_container_width=True)
+        st.pyplot(fig_scatter)
 
 with tab2:
     st.subheader("🆚 Análisis Comparativo entre Textos")
@@ -388,30 +394,35 @@ with tab2:
         suffixes=(f' ({seleccion1})', f' ({seleccion2})')
     )
     
-    # Gráfico comparativo
-    fig_comp = go.Figure()
-    fig_comp.add_trace(go.Bar(
-        x=df_comparativo['Letra'],
-        y=df_comparativo['Frec. Observada (%)_x'],
-        name=seleccion1,
-        marker_color='#1f77b4'
-    ))
-    fig_comp.add_trace(go.Bar(
-        x=df_comparativo['Letra'],
-        y=df_comparativo['Frec. Observada (%)_y'],
-        name=seleccion2,
-        marker_color='#ff7f0e'
-    ))
+    # Gráfico comparativo con Matplotlib
+    st.subheader("📊 Comparación de Frecuencias")
+    fig_comp, ax_comp = plt.subplots(figsize=(14, 7))
     
-    fig_comp.update_layout(
-        barmode='group',
-        title='Comparación de Frecuencias',
-        xaxis_title="Letra",
-        yaxis_title="Frecuencia Observada (%)",
-        height=500
-    )
+    # Configurar posiciones
+    n = len(df_comparativo)
+    ind = np.arange(n)
+    ancho = 0.35
     
-    st.plotly_chart(fig_comp, use_container_width=True)
+    # Crear barras
+    rects1 = ax_comp.bar(ind - ancho/2, df_comparativo['Frec. Observada (%)_x'], 
+                         ancho, label=seleccion1, color='#1f77b4')
+    rects2 = ax_comp.bar(ind + ancho/2, df_comparativo['Frec. Observada (%)_y'], 
+                         ancho, label=seleccion2, color='#ff7f0e')
+    
+    # Configuración del gráfico
+    ax_comp.set_xlabel('Letra')
+    ax_comp.set_ylabel('Frecuencia Observada (%)')
+    ax_comp.set_title('Comparación de Frecuencias entre Textos')
+    ax_comp.set_xticks(ind)
+    ax_comp.set_xticklabels(df_comparativo['Letra'])
+    ax_comp.legend()
+    ax_comp.grid(True, linestyle='--', alpha=0.7)
+    
+    # Rotar etiquetas si son muchas
+    if n > 15:
+        plt.xticks(rotation=45)
+    
+    st.pyplot(fig_comp)
     
     # Tabla comparativa
     st.dataframe(df_comparativo.style.format({
@@ -431,7 +442,7 @@ with tab3:
     - Cifrado/descifrado César interactivo
     - Autodescifrado mediante análisis estadístico
     - Comparación entre múltiples textos
-    - Visualizaciones profesionales e interactivas
+    - Visualizaciones profesionales
     
     ### Métricas calculadas:
     - **Índice de coincidencia**: Mide la probabilidad de que dos letras aleatorias sean iguales
@@ -444,8 +455,8 @@ with tab3:
     ### Tecnologías utilizadas:
     - Python 3.10+
     - Streamlit (interfaz web)
-    - Plotly (visualizaciones interactivas)
     - Pandas (procesamiento de datos)
+    - Matplotlib (visualizaciones)
     
     *Desarrollado por [Tu Nombre] | [Año Actual]*
     """)
