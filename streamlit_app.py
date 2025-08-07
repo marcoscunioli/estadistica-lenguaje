@@ -6,7 +6,6 @@ from collections import Counter
 from io import StringIO
 import unicodedata
 import re
-from wordcloud import WordCloud
 import numpy as np
 
 # Configuración de página
@@ -96,14 +95,6 @@ def obtener_ngramas(texto_limpio, n=2, top_n=10):
         ngrama = texto_limpio[i:i+n]
         ngramas[ngrama] += 1
     return ngramas.most_common(top_n)
-
-# Función para generar wordcloud
-def generar_wordcloud(ngramas):
-    if not ngramas:
-        return None
-    text = ' '.join(ngrama for ngrama, count in ngramas)
-    wc = WordCloud(width=800, height=400, background_color='white').generate(text)
-    return wc
 
 # --- INTERFAZ DE USUARIO ---
 
@@ -302,7 +293,7 @@ with tab1:
     st.subheader("🔍 Análisis de N-Gramas")
     
     if st.checkbox("Mostrar bigramas y trigramas"):
-        col_bg, col_tg, col_wc = st.columns([2, 2, 3])
+        col_bg, col_tg = st.columns(2)
         
         with col_bg:
             st.markdown("**🔸 Top Bigramas**")
@@ -315,17 +306,6 @@ with tab1:
             trigramas = obtener_ngramas(solo_letras, 3, num_ngramas)
             for t, f in trigramas:
                 st.code(f"{t}: {f} ocurrencias ({f/(total_caracteres-2)*100:.2f}%)")
-        
-        with col_wc:
-            st.markdown("**☁️ Nube de Palabras de Bigramas**")
-            if bigramas:
-                wc = generar_wordcloud(bigramas)
-                if wc:
-                    st.image(wc.to_array(), use_column_width=True)
-                else:
-                    st.warning("No hay suficientes bigramas para generar nube")
-            else:
-                st.info("No hay bigramas disponibles")
     
     # Análisis avanzado
     with st.expander("🧠 Análisis Avanzado"):
