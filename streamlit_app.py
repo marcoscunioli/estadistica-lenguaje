@@ -330,7 +330,7 @@ with tab1:
         
         st.metric("Correlación con idioma de referencia", f"{correlacion:.4f}")
         
-        # Gráfico de dispersión
+        # Gráfico de dispersión (CORRECCIÓN APLICADA AQUÍ)
         fig_scatter = go.Figure()
         fig_scatter.add_trace(go.Scatter(
             x=df['Frec. Esperada (%)'],
@@ -338,7 +338,7 @@ with tab1:
             mode='markers+text',
             text=df['Letra'],
             marker=dict(size=12, color='royalblue')
-        )
+        ))  # Paréntesis corregido
         
         # Línea de referencia
         fig_scatter.add_trace(go.Scatter(
@@ -446,7 +446,6 @@ with tab3:
     - Streamlit (interfaz web)
     - Plotly (visualizaciones interactivas)
     - Pandas (procesamiento de datos)
-    - NLTK (procesamiento lingüístico)
     
     *Desarrollado por [Tu Nombre] | [Año Actual]*
     """)
