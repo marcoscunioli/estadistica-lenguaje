@@ -12,7 +12,7 @@ from wordcloud import WordCloud
 # --- CONFIGURACIÓN DE PÁGINA Y CONSTANTES ---
 
 st.set_page_config(
-    page_title="CriptoAnalizador Definitivo",
+    page_title="CriptoAnalizador",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -158,7 +158,7 @@ def main():
     
     # --- PANEL LATERAL DE CONTROLES ---
     with st.sidebar:
-        st.title("🛡️ CriptoAnalizador Definitivo")
+        st.title("🛡️ CriptoAnalizador")
         st.markdown("Herramienta todo-en-uno para análisis de textos y criptografía clásica.")
         
         idioma_seleccionado = st.selectbox(
@@ -179,7 +179,7 @@ def main():
             except Exception as e:
                 st.error(f"Error al leer el archivo: {e}")
                 return
-        
+            
         st.divider()
         st.markdown("### ⚙️ Opciones de Análisis")
         num_ngramas = st.slider("Top N-gramas a mostrar", 5, 20, 10)
@@ -187,6 +187,7 @@ def main():
     # --- LÓGICA PRINCIPAL ---
     if not texto_entrada:
         st.info("👋 ¡Bienvenido! Ingresa texto en el panel lateral para comenzar.")
+        st.markdown("Script desarrollado por Marcos Sebastian Cunioli - Especialista en Ciberseguridad")
         return
 
     texto_limpio = limpiar_texto(texto_entrada, alfabeto)
@@ -314,7 +315,7 @@ def main():
                 st.experimental_rerun()
 
     with tab_acerca:
-        st.header("ℹ️ Acerca de CriptoAnalizador Definitivo")
+        st.header("ℹ️ Acerca de CriptoAnalizador")
         st.markdown("""
         Esta herramienta es el resultado de la fusión y mejora de varios scripts de análisis de texto, 
         combinando las mejores características para crear una suite de criptoanálisis educativa y potente.
@@ -327,10 +328,9 @@ def main():
         - **Análisis Comparativo:** Guarda y compara diferentes textos para encontrar patrones.
 
         **Tecnologías:** Python, Streamlit, Pandas, Plotly, WordCloud.
-
-        *Versión 1.0 - Agosto 2025*
+        
+        *Script desarrollado por Marcos Sebastian Cunioli - Especialista en Ciberseguridad*
         """)
 
 if __name__ == "__main__":
     main()
-
