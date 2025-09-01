@@ -50,8 +50,19 @@ def get_alphabet_from_lang(lang: str) -> str:
     return "".join(FRECUENCIAS_IDIOMAS[lang].keys())
 
 def normalizar_texto(texto: str) -> str:
-    """Elimina acentos y convierte a mayúsculas."""
-    texto_sin_acentos = ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
+    """Elimina acentos y convierte a mayúsculas preservando la ñ."""
+    # Manejar caso especial de la ñ
+    texto = texto.replace('ñ', '|n|').replace('Ñ', '|N|')
+    
+    # Normalizar y eliminar diacríticos
+    texto_sin_acentos = ''.join(
+        c for c in unicodedata.normalize('NFD', texto) 
+        if unicodedata.category(c) != 'Mn'
+    )
+    
+    # Restaurar la ñ
+    texto_sin_acentos = texto_sin_acentos.replace('|n|', 'ñ').replace('|N|', 'Ñ')
+    
     return texto_sin_acentos.upper()
 
 def limpiar_texto(texto: str, alfabeto: str) -> str:
@@ -60,15 +71,21 @@ def limpiar_texto(texto: str, alfabeto: str) -> str:
 
 @st.cache_data
 def aplicar_cifrado_cesar(texto: str, desplazamiento: int, alfabeto: str) -> str:
-    """Aplica el cifrado César a un texto, respetando los caracteres no alfabéticos."""
+    """Aplica el cifrado César a un texto, preservando caracteres no alfabéticos."""
     resultado = ""
-    texto_norm = normalizar_texto(texto)
-    for char in texto_norm:
-        if char in alfabeto:
-            idx = alfabeto.index(char)
+    for char in texto:
+        if char.upper() in alfabeto:
+            # Preservar mayúsculas/minúsculas
+            es_mayuscula = char.isupper()
+            char_upper = char.upper()
+            
+            idx = alfabeto.index(char_upper)
             nuevo_idx = (idx + desplazamiento) % len(alfabeto)
-            resultado += alfabeto[nuevo_idx]
+            nuevo_char = alfabeto[nuevo_idx]
+            
+            resultado += nuevo_char if es_mayuscula else nuevo_char.lower()
         else:
+            # Preservar caracteres que no están en el alfabeto
             resultado += char
     return resultado
 
@@ -174,11 +191,17 @@ def main():
         archivo_subido = st.file_uploader("O carga un archivo .txt", type="txt")
         if archivo_subido:
             try:
-                texto_entrada = StringIO(archivo_subido.getvalue().decode("utf-8")).read()
-                st.success("Archivo cargado.")
+                # Leer el contenido según el tipo de archivo
+                if hasattr(archivo_subido, 'type') and archivo_subido.type == "text/plain":
+                    texto_entrada = StringIO(archivo_subido.getvalue().decode("utf-8")).read()
+                else:
+                    # Intentar leer otros formatos
+                    texto_entrada = str(archivo_subido.getvalue(), "utf-8", errors="ignore")
+                st.success("Archivo cargado correctamente.")
             except Exception as e:
                 st.error(f"Error al leer el archivo: {e}")
-                return
+                # No detener la ejecución, solo limpiar el texto de entrada
+                texto_entrada = ""
             
         st.divider()
         st.markdown("### ⚙️ Opciones de Análisis")
@@ -206,16 +229,25 @@ def main():
         
         if len(texto_limpio) < 20:
             st.warning("El texto es muy corto para un análisis estadístico fiable.")
-            return
             
         # --- Métricas Clave ---
         conteo = Counter(texto_limpio)
         total_letras = len(texto_limpio)
         ic_calculado = calcular_ic(texto_limpio)
-        correlacion = np.corrcoef(
-            list(FRECUENCIAS_IDIOMAS[idioma_seleccionado].values()),
-            [(conteo.get(l, 0) / total_letras) * 100 for l in alfabeto]
-        )[0, 1]
+        
+        # Calcular correlación solo si hay suficientes letras
+        if total_letras > 0:
+            # Preparar datos para correlación
+            frec_observadas = [(conteo.get(l, 0) / total_letras) * 100 for l in alfabeto]
+            frec_esperadas = [FRECUENCIAS_IDIOMAS[idioma_seleccionado].get(l, 0) for l in alfabeto]
+            
+            # Calcular correlación si hay variación en los datos
+            if np.std(frec_observadas) > 0 and np.std(frec_esperadas) > 0:
+                correlacion = np.corrcoef(frec_observadas, frec_esperadas)[0, 1]
+            else:
+                correlacion = 0
+        else:
+            correlacion = 0
 
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total de Letras", f"{total_letras:,}")
@@ -226,45 +258,51 @@ def main():
         st.text_area("Texto Limpio Analizado", value=texto_limpio, height=100, disabled=True)
 
         # --- Análisis de Frecuencias ---
-        st.subheader("Frecuencia de Letras (Monogramas)")
-        frec_observada = {letra: (conteo.get(letra, 0) / total_letras) * 100 for letra in alfabeto}
-        df_frec = pd.DataFrame({
-            'Letra': list(alfabeto),
-            'Esperada (%)': [FRECUENCIAS_IDIOMAS[idioma_seleccionado].get(l, 0) for l in alfabeto],
-            'Observada (%)': [frec_observada.get(l, 0) for l in alfabeto],
-            'Conteo': [conteo.get(l, 0) for l in alfabeto]
-        })
-        
-        st.plotly_chart(plot_frecuencias(df_frec), use_container_width=True)
-        with st.expander("Ver tabla de frecuencias detallada"):
-            st.dataframe(df_frec.style.format({'Esperada (%)': '{:.2f}', 'Observada (%)': '{:.2f}'}), use_container_width=True)
-
-        # --- Análisis de N-gramas y WordCloud ---
-        st.subheader("Análisis de N-gramas")
-        c1, c2 = st.columns([1, 2])
-        with c1:
-            tipo_ngrama = st.radio("Mostrar N-gramas:", ["Bigramas", "Trigramas"], horizontal=True)
-            n = 2 if tipo_ngrama == "Bigramas" else 3
-            ngramas = obtener_n_gramas(texto_limpio, n, num_ngramas)
-            df_ngrama = pd.DataFrame(ngramas, columns=[tipo_ngrama, 'Frecuencia'])
-            st.dataframe(df_ngrama, use_container_width=True)
-        with c2:
-            st.markdown(f"**☁️ Nube de {tipo_ngrama}**")
-            wc_image = generar_wordcloud(ngramas)
-            if wc_image is not None:
-                st.image(wc_image, use_column_width=True)
-            else:
-                st.info("No hay suficientes datos para generar la nube de palabras.")
-
-        # --- Guardar en Historial ---
-        st.divider()
-        if st.button("💾 Guardar este análisis en el historial", use_container_width=True):
-            st.session_state.historial.append({
-                'nombre': f"Análisis {len(st.session_state.historial) + 1} ({idioma_seleccionado}, {total_letras} letras)",
-                'df': df_frec,
-                'texto_limpio': texto_limpio
+        if total_letras > 0:
+            st.subheader("Frecuencia de Letras (Monogramas)")
+            frec_observada = {letra: (conteo.get(letra, 0) / total_letras) * 100 for letra in alfabeto}
+            df_frec = pd.DataFrame({
+                'Letra': list(alfabeto),
+                'Esperada (%)': [FRECUENCIAS_IDIOMAS[idioma_seleccionado].get(l, 0) for l in alfabeto],
+                'Observada (%)': [frec_observada.get(l, 0) for l in alfabeto],
+                'Conteo': [conteo.get(l, 0) for l in alfabeto]
             })
-            st.success("Análisis guardado.")
+            
+            st.plotly_chart(plot_frecuencias(df_frec), use_container_width=True)
+            with st.expander("Ver tabla de frecuencias detallada"):
+                st.dataframe(df_frec.style.format({'Esperada (%)': '{:.2f}', 'Observada (%)': '{:.2f}'}), use_container_width=True)
+
+            # --- Análisis de N-gramas y WordCloud ---
+            st.subheader("Análisis de N-gramas")
+            c1, c2 = st.columns([1, 2])
+            with c1:
+                tipo_ngrama = st.radio("Mostrar N-gramas:", ["Bigramas", "Trigramas"], horizontal=True)
+                n = 2 if tipo_ngrama == "Bigramas" else 3
+                ngramas = obtener_n_gramas(texto_limpio, n, num_ngramas)
+                if ngramas:
+                    df_ngrama = pd.DataFrame(ngramas, columns=[tipo_ngrama, 'Frecuencia'])
+                    st.dataframe(df_ngrama, use_container_width=True)
+                else:
+                    st.info("No hay suficientes datos para generar n-gramas.")
+            with c2:
+                st.markdown(f"**☁️ Nube de {tipo_ngrama}**")
+                wc_image = generar_wordcloud(ngramas)
+                if wc_image is not None:
+                    st.image(wc_image, use_container_width=True)
+                else:
+                    st.info("No hay suficientes datos para generar la nube de palabras.")
+
+            # --- Guardar en Historial ---
+            st.divider()
+            if st.button("💾 Guardar este análisis en el historial", use_container_width=True):
+                st.session_state.historial.append({
+                    'nombre': f"Análisis {len(st.session_state.historial) + 1} ({idioma_seleccionado}, {total_letras} letras)",
+                    'df': df_frec,
+                    'texto_limpio': texto_limpio
+                })
+                st.success("Análisis guardado.")
+        else:
+            st.warning("No hay texto válido para analizar después de la limpieza.")
 
     with tab_crypto:
         st.header("Herramientas de Criptografía Clásica")
@@ -312,7 +350,7 @@ def main():
 
             if c1.button("🧹 Limpiar historial", use_container_width=True):
                 st.session_state.historial = []
-                st.experimental_rerun()
+                st.rerun()
 
     with tab_acerca:
         st.header("ℹ️ Acerca de CriptoAnalizador")
@@ -334,3 +372,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
